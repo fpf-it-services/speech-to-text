@@ -6,6 +6,8 @@ from rest_framework.response import Response
 import assemblyai as aai
 import os
 from django.http import JsonResponse
+from google import genai
+
 
 # Configurez l'API Key d'AssemblyAI
 aai.settings.api_key = "a6d31e8ed3c141529da0e65781508992"
@@ -37,9 +39,48 @@ def transcribe_audio(request):
     # Supprime le fichier audio après transcription
     os.remove(audio_path)
     print(transcript.text)
+    
+    
+
+    # client = genai.Client(api_key="AIzaSyB9AhT3ROhLlPrmTbKiChwUQZ913SiDfoU")
+    # response = client.models.generate_content(
+    #     model="gemini-2.0-flash", contents=f'Traduit en langue {target_language} ceci sans markdown: {transcript.text}'
+    # )
+    # print(response.text)
+
 
     data = {
         "message": transcript.text,
         "status": "success"
     }
     return Response(data)
+
+@api_view(['POST'])
+def translate_to_local_language(request, target_language):
+    text = request.data.get('text')
+
+    if not text:
+        return JsonResponse({'error': 'Aucun texte à traduire envoyé.'}, status=400)
+
+    try:
+        client = genai.Client(api_key="AIzaSyB9AhT3ROhLlPrmTbKiChwUQZ913SiDfoU")
+        response = client.models.generate_content(
+            model="gemini-2.0-flash", 
+            contents=f'Traduit en langue {target_language} ceci sans markdown: {text}'
+        )
+
+        if response.text:
+            data = {
+                'original_text': text,
+                "translation": response.text,
+                'target_language': target_language,
+                "status": "success"
+            }
+            return Response(data)
+        else:
+            return JsonResponse({'error': 'La traduction a échoué.'}, status=500)
+
+    except genai.error.APIError as e:
+        return JsonResponse({'error': f'Erreur de l\'API Gemini : {e}'}, status=500)
+    except Exception as e:
+        return JsonResponse({'error': f'Une erreur inattendue s\'est produite : {e}'}, status=500)
